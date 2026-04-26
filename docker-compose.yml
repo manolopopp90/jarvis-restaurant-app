@@ -2,40 +2,59 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: restaurant-backend
-    user: "node:node"
+    build: ./backend
     ports:
-      - "3000:3000"
-    volumes:
-      - ./backend/data:/app/data
+      - "${PORT:-3000}:3000"
     environment:
-      - PORT=3000
-      - NODE_ENV=production
-      - DB_PATH=/app/data/seeblick.db
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
+      - DB_PATH=${DB_PATH:-./database/restaurant.db}
+      - LOG_DIR=${LOG_DIR:-./logs}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - BACKUP_DIR=${BACKUP_DIR:-./backups}
+      - RETENTION_DAYS=${RETENTION_DAYS:-30}
+    volumes:
+      - ./database:/app/database
+      - ./logs:/app/logs
+      - ./backups:/app/backups
     restart: unless-stopped
-    networks:
-      - restaurant-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   frontend:
-    image: restaurant-app-cors:latest
-    container_name: restaurant-frontend
+    build: ./frontend
     ports:
-      - "5005:5005"
+      - "${FRONTEND_PORT:-5005}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Optional: Backup-Service mit Cron
+  backup:
+    build: ./backend
+    command: >
+      sh -c "
+        echo '0 */6 * * * cd /app && node scripts/backup.js backup && echo \"Backup um $$(date) erstellt\" >> /app/logs/backup.log' | crontab - &&
+cron -f
+      "
+    volumes:
+      - ./database:/app/database
+      - ./backups:/app/backups
+      - ./logs:/app/logs
     environment:
-      - PORT=5005
-      - API_URL=http://backend:3000
+      - BACKUP_DIR=${BACKUP_DIR:-./backups}
+      - DB_PATH=${DB_PATH:-./database/restaurant.db}
+      - RETENTION_DAYS=${RETENTION_DAYS:-30}
     restart: unless-stopped
     depends_on:
       - backend
-    networks:
-      - restaurant-network
-
-networks:
-  restaurant-network:
-    driver: bridge
 
 volumes:
-  backend-data:
+  database:
+  logs:
+  backups:

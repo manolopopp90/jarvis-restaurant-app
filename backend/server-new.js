@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const logger = require('./logger');
 const db = require('./database-json');
 const routes = require('./routes');
 const { initWebSocket } = require('./websocket');
@@ -29,7 +30,7 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`🚫 CORS blockiert: ${origin}`);
+      logger.warn(`🚫 CORS blockiert: ${origin}`);
       callback(new Error('Nicht erlaubter Origin'));
     }
   },
@@ -58,7 +59,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Logging Middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  logger.info(`${req.method} ${req.path} - ${req.ip}`);
   next();
 });
 
@@ -83,6 +84,7 @@ app.use((req, res, next) => {
     }
     
     if (data.count > RATE_LIMIT_MAX) {
+      logger.warn(`Rate Limit überschritten: ${ip}`);
       return res.status(429).json({ 
         success: false, 
         error: 'Zu viele Anfragen. Bitte warten Sie einen Moment.' 
@@ -120,7 +122,8 @@ app.get('*', (req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error('❌ Unbehandelter Fehler:', err);
+  logger.error('Unbehandelter Fehler:', { error: err.message, stack: err.stack });
+  
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   res.status(err.status || 500).json({
@@ -135,22 +138,10 @@ initWebSocket(server);
 
 // Server starten
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Seeblick Backend läuft auf Port ${PORT}`);
-  console.log(`🔒 CORS erlaubt: ${allowedOrigins.join(', ')}`);
-  console.log(`📊 Datenbank: JSON (${path.join(__dirname, 'seeblick.json')})`);
-  console.log(`🔌 WebSocket: aktiviert`);
-  console.log(`🌐 API-Endpoints:`);
-  console.log(`   GET    /api/tables`);
-  console.log(`   GET    /api/tables/:number`);
-  console.log(`   PATCH  /api/tables/:number/status`);
-  console.log(`   GET    /api/orders`);
-  console.log(`   POST   /api/orders`);
-  console.log(`   GET    /api/orders/:id`);
-  console.log(`   PATCH  /api/orders/:id/status`);
-  console.log(`   POST   /api/qr-scan`);
-  console.log(`   GET    /api/qr-scans`);
-  console.log(`   GET    /api/stats`);
-  console.log(`   GET    /health`);
+  logger.info(`✅ Seeblick Backend gestartet auf Port ${PORT}`);
+  logger.info(`🔒 CORS erlaubt: ${allowedOrigins.join(', ')}`);
+  logger.info(`📊 Datenbank: JSON (${path.join(__dirname, 'seeblick.json')})`);
+  logger.info(`🔌 WebSocket: aktiviert`);
 });
 
 module.exports = { app, server };
