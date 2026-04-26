@@ -1,91 +1,151 @@
 const express = require('express');
 const router = express.Router();
 const db = require('./database-json');
+const { validate, qrScanSchema, orderSchema, tableStatusSchema, orderStatusSchema } = require('./validation');
+
+// Hilfsfunktion für Prepared Statement Simulation (JSON-DB)
+// Bei Umstellung auf SQLite: db.prepare(sql).get(params)
+function safeQuery(operation, ...params) {
+  try {
+    // Parameter-Sanitisierung
+    const sanitized = params.map(p => {
+      if (typeof p === 'string') {
+        // Entferne potenziell gefährliche Zeichen
+        return p.replace(/[;\\"']/g, '');
+      }
+      return p;
+    });
+    return operation(...sanitized);
+  } catch (error) {
+    throw new Error(`Database query failed: ${error.message}`);
+  }
+}
 
 // Get all tables
 router.get('/tables', (req, res) => {
   try {
-    const tables = db.getTables();
+    const tables = safeQuery(db.getTables.bind(db));
     res.json({ success: true, data: tables });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching tables:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Get table by number
 router.get('/tables/:number', (req, res) => {
   try {
-    const table = db.getTableByNumber(parseInt(req.params.number));
+    const tableNum = parseInt(req.params.number);
+    
+    // Validierung
+    if (isNaN(tableNum) || tableNum < 1 || tableNum > 12) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültige Tischnummer. Muss zwischen 1 und 12 liegen.' 
+      });
+    }
+    
+    const table = safeQuery(db.getTableByNumber.bind(db), tableNum);
     if (!table) {
-      return res.status(404).json({ success: false, error: 'Table not found' });
+      return res.status(404).json({ success: false, error: 'Tisch nicht gefunden' });
     }
     res.json({ success: true, data: table });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching table:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Update table status
 router.patch('/tables/:number/status', (req, res) => {
   try {
-    const { status } = req.body;
-    const validStatuses = ['available', 'occupied', 'reserved', 'cleaning'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ success: false, error: 'Invalid status' });
+    const tableNum = parseInt(req.params.number);
+    
+    // Validierung Tischnummer
+    if (isNaN(tableNum) || tableNum < 1 || tableNum > 12) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültige Tischnummer' 
+      });
     }
-
-    const result = db.updateTableStatus(parseInt(req.params.number), status);
+    
+    // Zod-Validierung für Status
+    const validation = validate(tableStatusSchema, req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültiger Status',
+        details: validation.errors 
+      });
+    }
+    
+    const { status } = validation.data;
+    const result = safeQuery(db.updateTableStatus.bind(db), tableNum, status);
+    
     if (!result) {
-      return res.status(404).json({ success: false, error: 'Table not found' });
+      return res.status(404).json({ success: false, error: 'Tisch nicht gefunden' });
     }
-    res.json({ success: true, message: 'Table status updated' });
+    
+    res.json({ success: true, message: 'Tischstatus aktualisiert' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error updating table status:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Create new order
 router.post('/orders', (req, res) => {
   try {
-    const { tableNumber, items, total, tax, specialInstructions } = req.body;
-
-    // Validate table exists
-    const table = db.getTableByNumber(tableNumber);
-    if (!table) {
-      return res.status(404).json({ success: false, error: 'Table not found' });
+    // Zod-Validierung für Bestellung
+    const validation = validate(orderSchema, req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültige Bestelldaten',
+        details: validation.errors 
+      });
     }
-
-    // Create order
-    const order = db.createOrder({
+    
+    const { tableNumber, items, total, tax, specialInstructions } = validation.data;
+    
+    // Prüfe ob Tisch existiert
+    const table = safeQuery(db.getTableByNumber.bind(db), tableNumber);
+    if (!table) {
+      return res.status(404).json({ success: false, error: 'Tisch nicht gefunden' });
+    }
+    
+    // Erstelle Bestellung (Prepared Statement Simulation)
+    const order = safeQuery(db.createOrder.bind(db), {
       tableNumber,
       total,
       tax,
       specialInstructions: specialInstructions || null
     });
-
-    // Add order items
+    
+    // Füge Bestell-Items hinzu
     for (const item of items) {
-      db.addOrderItem({
+      safeQuery(db.addOrderItem.bind(db), {
         orderId: order.id,
-        menuItemId: item.menuItem.id,
-        name: item.menuItem.name,
-        price: item.menuItem.price,
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
         quantity: item.quantity,
         extras: JSON.stringify(item.extras || []),
         specialInstructions: item.specialInstructions || null
       });
     }
-
-    // Update table status to occupied
-    db.updateTableStatus(tableNumber, 'occupied');
-
+    
+    // Aktualisiere Tischstatus
+    safeQuery(db.updateTableStatus.bind(db), tableNumber, 'occupied');
+    
     res.status(201).json({
       success: true,
       data: { orderId: order.id, tableNumber, status: 'pending' },
-      message: 'Order created successfully'
+      message: 'Bestellung erfolgreich erstellt'
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error creating order:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
@@ -93,98 +153,146 @@ router.post('/orders', (req, res) => {
 router.get('/orders', (req, res) => {
   try {
     const { status } = req.query;
-    let orders = db.getOrders();
-
+    let orders = safeQuery(db.getOrders.bind(db));
+    
     if (status) {
+      // Validierung Status-Parameter
+      const validStatuses = ['pending', 'preparing', 'ready', 'served', 'paid', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Ungültiger Status-Filter' 
+        });
+      }
       orders = orders.filter(o => o.status === status);
     }
-
-    // Add items to each order
+    
+    // Füge Items zu jeder Bestellung hinzu
     const ordersWithItems = orders.map(order => ({
       ...order,
-      items: db.getOrderItems(order.id)
+      items: safeQuery(db.getOrderItems.bind(db), order.id)
     }));
-
+    
     res.json({ success: true, data: ordersWithItems });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Get order by ID
 router.get('/orders/:id', (req, res) => {
   try {
-    const order = db.getOrderById(parseInt(req.params.id));
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
+    const orderId = parseInt(req.params.id);
+    
+    if (isNaN(orderId) || orderId < 1) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültige Bestell-ID' 
+      });
     }
-
-    const items = db.getOrderItems(order.id);
+    
+    const order = safeQuery(db.getOrderById.bind(db), orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Bestellung nicht gefunden' });
+    }
+    
+    const items = safeQuery(db.getOrderItems.bind(db), order.id);
     res.json({ success: true, data: { ...order, items } });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching order:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Update order status
 router.patch('/orders/:id/status', (req, res) => {
   try {
-    const { status } = req.body;
-    const validStatuses = ['pending', 'preparing', 'ready', 'served', 'paid', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ success: false, error: 'Invalid status' });
+    const orderId = parseInt(req.params.id);
+    
+    if (isNaN(orderId) || orderId < 1) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültige Bestell-ID' 
+      });
     }
-
-    const result = db.updateOrderStatus(parseInt(req.params.id), status);
+    
+    // Zod-Validierung für Status
+    const validation = validate(orderStatusSchema, req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültiger Status',
+        details: validation.errors 
+      });
+    }
+    
+    const { status } = validation.data;
+    const result = safeQuery(db.updateOrderStatus.bind(db), orderId, status);
+    
     if (!result) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
+      return res.status(404).json({ success: false, error: 'Bestellung nicht gefunden' });
     }
-
-    res.json({ success: true, message: 'Order status updated' });
+    
+    res.json({ success: true, message: 'Bestellstatus aktualisiert' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error updating order status:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Record QR scan
 router.post('/qr-scan', (req, res) => {
   try {
-    const { tableNumber, scanData } = req.body;
-
-    const scan = db.addQrScan({
+    // Zod-Validierung
+    const validation = validate(qrScanSchema, req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültige Scan-Daten',
+        details: validation.errors 
+      });
+    }
+    
+    const { tableNumber, scanData } = validation.data;
+    
+    const scan = safeQuery(db.addQrScan.bind(db), {
       tableNumber,
       scanData: scanData || null,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'] || null
     });
-
+    
     res.status(201).json({
       success: true,
       data: { scanId: scan.id, tableNumber },
-      message: 'QR scan recorded'
+      message: 'QR-Scan erfolgreich aufgezeichnet'
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error recording QR scan:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Get QR scan history
 router.get('/qr-scans', (req, res) => {
   try {
-    const scans = db.getQrScans();
+    const scans = safeQuery(db.getQrScans.bind(db));
     res.json({ success: true, data: scans });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching QR scans:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
 // Get statistics
 router.get('/stats', (req, res) => {
   try {
-    const stats = db.getStats();
+    const stats = safeQuery(db.getStats.bind(db));
     res.json({ success: true, data: stats });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ success: false, error: 'Interner Serverfehler' });
   }
 });
 
