@@ -2,11 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
 const db = require('./database-json');
 const routes = require('./routes');
+const { initWebSocket } = require('./websocket');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// HTTP-Server für Express und Socket.io
+const server = http.createServer(app);
 
 // CORS-Konfiguration mit Tailscale-URL
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
@@ -19,7 +24,6 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Erlaube Anfragen ohne Origin (z.B. von Mobile Apps)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
@@ -32,22 +36,16 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
-  maxAge: 86400 // 24 Stunden
+  maxAge: 86400
 };
 
 // Sicherheits-Header
 app.use((req, res, next) => {
-  // Content Security Policy
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
-  
-  // XSS Protection
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:;");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
-  // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
   next();
 });
 
@@ -60,14 +58,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Logging Middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.headers.origin || 'keiner'}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// Rate Limiting (einfache Implementierung)
+// Rate Limiting
 const requestCounts = new Map();
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 Minuten
-const RATE_LIMIT_MAX = 100; // Max 100 Anfragen pro Window
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
+const RATE_LIMIT_MAX = 100;
 
 app.use((req, res, next) => {
   const ip = req.ip || req.connection.remoteAddress;
@@ -107,11 +105,12 @@ app.get('/health', (req, res) => {
     success: true, 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    websocket: 'aktiv'
   });
 });
 
-// SPA Fallback für React Router (nur für Nicht-API-Routen)
+// SPA Fallback
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ success: false, error: 'API-Endpunkt nicht gefunden' });
@@ -122,8 +121,6 @@ app.get('*', (req, res) => {
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('❌ Unbehandelter Fehler:', err);
-  
-  // Sende keine detaillierten Fehler in Produktion
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   res.status(err.status || 500).json({
@@ -133,11 +130,15 @@ app.use((err, req, res, next) => {
   });
 });
 
+// WebSocket initialisieren
+initWebSocket(server);
+
 // Server starten
-app.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Seeblick Backend läuft auf Port ${PORT}`);
   console.log(`🔒 CORS erlaubt: ${allowedOrigins.join(', ')}`);
   console.log(`📊 Datenbank: JSON (${path.join(__dirname, 'seeblick.json')})`);
+  console.log(`🔌 WebSocket: aktiviert`);
   console.log(`🌐 API-Endpoints:`);
   console.log(`   GET    /api/tables`);
   console.log(`   GET    /api/tables/:number`);
@@ -152,4 +153,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   GET    /health`);
 });
 
-module.exports = app;
+module.exports = { app, server };

@@ -11,33 +11,40 @@ import OrderConfirmationPage from './pages/OrderConfirmationPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import TableManagementPage from './pages/TableManagementPage';
 import ItemDetailModal from './components/ItemDetailModal';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
 function App() {
   return (
-    <CartProvider>
-      <TableProvider>
-        <OrderProvider>
-          <Router>
-            <div className="min-h-screen bg-off-white font-primary text-text-primary">
-              <main className="pb-20">
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/scanner" element={<QRScannerPage />} />
-                  <Route path="/menu/:category?" element={<MenuPage />} />
-                  <Route path="/cart" element={<CartPage />} />
-                  <Route path="/confirmation" element={<OrderConfirmationPage />} />
-                  <Route path="/admin" element={<AdminDashboardPage />} />
-                  <Route path="/admin/tables" element={<TableManagementPage />} />
-                </Routes>
-              </main>
-              <ItemDetailModal />
-              <BottomNav />
-            </div>
-          </Router>
-        </OrderProvider>
-      </TableProvider>
-    </CartProvider>
+    <ErrorBoundary>
+      <CartProvider>
+        <TableProvider>
+          <OrderProvider>
+            <Router>
+              <div className="min-h-screen bg-off-white font-primary text-text-primary">
+                <main className="pb-20">
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/scanner" element={
+                      <ErrorBoundary onReset={() => window.location.reload()}>
+                        <QRScannerPage />
+                      </ErrorBoundary>
+                    } />
+                    <Route path="/menu/:category?" element={<MenuPage />} />
+                    <Route path="/cart" element={<CartPage />} />
+                    <Route path="/confirmation" element={<OrderConfirmationPage />} />
+                    <Route path="/admin" element={<AdminDashboardPage />} />
+                    <Route path="/admin/tables" element={<TableManagementPage />} />
+                  </Routes>
+                </main>
+                <ItemDetailModal />
+                <BottomNav />
+              </div>
+            </Router>
+          </OrderProvider>
+        </TableProvider>
+      </CartProvider>
+    </ErrorBoundary>
   );
 }
 

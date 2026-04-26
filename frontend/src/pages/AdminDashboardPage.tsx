@@ -1,14 +1,32 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Utensils, DollarSign, Users, CheckCircle, Clock, CookingPot } from 'lucide-react';
+import { Utensils, DollarSign, Users, CheckCircle, Clock, CookingPot, Wifi, WifiOff } from 'lucide-react';
 import TopBar from '../components/TopBar';
 import { useOrder } from '../contexts/OrderContext';
 import { useTable } from '../contexts/TableContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 import TableCard from '../components/TableCard';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const { orders } = useOrder();
   const { allTables, updateTableStatus } = useTable();
+  
+  // WebSocket für Echtzeit-Updates
+  const { isConnected, newOrders, joinAdminRoom } = useWebSocket();
+
+  useEffect(() => {
+    // Admin-Raum beitreten für Dashboard-Updates
+    joinAdminRoom();
+  }, [joinAdminRoom]);
+
+  useEffect(() => {
+    // Neue Bestellungen anzeigen
+    if (newOrders.length > 0) {
+      // Hier könnte man eine Toast-Notification anzeigen
+      console.log('📢 Neue Bestellungen:', newOrders);
+    }
+  }, [newOrders]);
 
   const stats = {
     activeOrders: orders.filter(o => o.status === 'pending' || o.status === 'preparing').length,
@@ -33,12 +51,19 @@ export default function AdminDashboardPage() {
       <TopBar
         title="Admin Dashboard"
         rightElement={
-          <button
-            onClick={() => navigate('/admin/tables')}
-            className="text-seeblick text-sm font-medium hover:underline"
-          >
-            Tische
-          </button>
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <Wifi size={18} className="text-seeblick" />
+            ) : (
+              <WifiOff size={18} className="text-red-500" />
+            )}
+            <button
+              onClick={() => navigate('/admin/tables')}
+              className="text-seeblick text-sm font-medium hover:underline"
+            >
+              Tische
+            </button>
+          </div>
         }
       />
 
