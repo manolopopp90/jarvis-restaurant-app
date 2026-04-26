@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  restaurant-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.optimized
+    container_name: restaurant-app
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/app/database/restaurant.db
+    volumes:
+      # Persist database outside container
+      - ./database:/app/database
+      # Optional: Allow live config changes
+      - ./nginx-prod.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+networks:
+  default:
+    name: restaurant-network

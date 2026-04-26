@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  restaurant-app:
+    build: .
+    container_name: restaurant-app
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/app/database/restaurant.db
+    volumes:
+      - ./database:/app/database
+    restart: unless-stopped
+
+  # Nginx für Static Files & Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: restaurant-nginx
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx-tailscale.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - restaurant-app
+    restart: unless-stopped

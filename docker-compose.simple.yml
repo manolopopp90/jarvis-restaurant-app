@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: node server.js
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend

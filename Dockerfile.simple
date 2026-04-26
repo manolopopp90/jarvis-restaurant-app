@@ -1,0 +1,20 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# Install serve
+RUN npm install -g serve
+
+# Copy built frontend
+COPY frontend/dist ./dist
+
+# Copy backend
+COPY backend ./backend
+WORKDIR /app/backend
+RUN npm install --production
+WORKDIR /app
+
+# Expose port
+EXPOSE 3001
+
+# Start frontend static server
+CMD ["serve", "-s", "dist", "-l", "3001"]

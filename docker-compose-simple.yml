@@ -1,0 +1,33 @@
+services:
+  restaurant-app:
+    build: .
+    container_name: seeblick-app
+    ports:
+      - "3002:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/app/database/restaurant.db
+    volumes:
+      - ./database:/app/database
+      - /app/database
+    restart: unless-stopped
+    networks:
+      - restaurant-network
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    container_name: seeblick-nginx-simple
+    ports:
+      - "80:80"
+    depends_on:
+      - restaurant-app
+    restart: unless-stopped
+    networks:
+      - restaurant-network
+
+networks:
+  restaurant-network:
+    driver: bridge

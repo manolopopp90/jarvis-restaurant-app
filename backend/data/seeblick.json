@@ -1,0 +1,91 @@
+{
+  "tables": [
+    {
+      "id": 1,
+      "tableNumber": 1,
+      "status": "available",
+      "seats": 2,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 2,
+      "tableNumber": 2,
+      "status": "available",
+      "seats": 2,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 3,
+      "tableNumber": 3,
+      "status": "available",
+      "seats": 2,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 4,
+      "tableNumber": 4,
+      "status": "available",
+      "seats": 2,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 5,
+      "tableNumber": 5,
+      "status": "available",
+      "seats": 4,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 6,
+      "tableNumber": 6,
+      "status": "available",
+      "seats": 4,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 7,
+      "tableNumber": 7,
+      "status": "available",
+      "seats": 4,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 8,
+      "tableNumber": 8,
+      "status": "available",
+      "seats": 4,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 9,
+      "tableNumber": 9,
+      "status": "available",
+      "seats": 6,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 10,
+      "tableNumber": 10,
+      "status": "available",
+      "seats": 6,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 11,
+      "tableNumber": 11,
+      "status": "available",
+      "seats": 6,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    },
+    {
+      "id": 12,
+      "tableNumber": 12,
+      "status": "available",
+      "seats": 6,
+      "createdAt": "2026-04-25T13:56:10.326Z"
+    }
+  ],
+  "orders": [],
+  "orderItems": [],
+  "qrScans": []
+}
